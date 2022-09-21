@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="reset.css" />
+    <link rel="stylesheet" href="normalize.css" />
+    <link rel="stylesheet" href="style.css" />
+    <title>Prueba</title>
+  </head>
+
+  <body>
+    <section class="characters-list loading"></section>
+    <script type="text/javascript">
+      window.addEventListener("DOMContentLoaded", (event) => {
+        init();
+      });
+      const init = () => {
+        fetchResource(740, "./character.json", parseCharacters);
+      };
+      const sleep = (ms) => {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      };
+      
+      async function fetchResource(delay, path, method, params) {
+        await sleep(delay);
+        try {
+          const response = await fetch(path, {
+            method: "GET",
+            headers: {
+              accept: "application/json",
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`Error! status: ${response.status}`);
+          }
+          const result = await response.json();
+          method(result, params);
+          return result;
+        } catch (err) {
+          console.log(err);
+        }
+      }
+
+      const getMaxDate = (list) => {
+        const maxAirDate = list.reduce(function (a, b) {
+          return Math.max(a, b);
+        });
+        const todayTime = new Date().getTime();
+        const lastEpisodeEmitTime = new Date(maxAirDate).getTime();
+        const difference = todayTime - lastEpisodeEmitTime;
+        const days = Math.ceil(difference / (1000 * 3600 * 24));
+        return `El último episodio fue emitido hace ${days} días`;
+      };
+
+      const parseEpisodes = (list, charactersList) => {
+        const episodesList = [...list].filter((item) => {
+          const { season } = item;
+          return season === "3" || season === "5";
+        });
+        episodesList.map((e) => {
+          const { characters, episode, title, season, air_date } = e;
+
+          characters.map((c) => {
+            const character = charactersList.find((char) => char.name === c);
+            if (character) {
+              const date = air_date.split("-");
+              const fDate = Date.UTC(date[2], date[0] - 1, date[1]);
+              character.dates.push(fDate);
+              character.episodes.push({ episode, title, season });
+            }
+            return c;
+          });
+          return e;
+        });
+
+        const charactersWithEpisodesList = charactersList.filter(
+          (e) => e.episodes.length
+        );
+        paintCharactersList(charactersWithEpisodesList);
+      };
+
+      const paintCharactersList = (list) => {
+        const DOMlist = document.body.querySelector(".characters-list");
+        list.map((e) => {
+          const { episodes, dates, name } = e;
+          const detailsElem = document.createElement("details");
+          const summaryElem = document.createElement("summary");
+          const maxDate = document.createElement("h6");
+          maxDate.textContent = getMaxDate(dates);
+          summaryElem.textContent = name;
+          detailsElem.classList.add("characters-list__details");
+          summaryElem.classList.add("characters-list__summary");
+          detailsElem.appendChild(summaryElem);
+          detailsElem.appendChild(paintEpisodes(episodes, maxDate));
+          DOMlist.appendChild(detailsElem);
+        });
+        DOMlist.classList.remove("loading");
+      };
+
+      const paintEpisodes = (episodes, maxdate) => {
+        let currentSeason = null;
+        const episodesOrdered = episodes.sort((a, b) => a.season - b.season);
+        const detailsContent = document.createElement("div");
+        detailsContent.classList.add("characters-list__content");
+        let dlElem;
+        episodesOrdered.map((e) => {
+          const { season, episode, title } = e;
+          if (currentSeason !== season) {
+            const seasonTitle = document.createElement("h4");
+            const episodesTitle = document.createElement("h5");
+            dlElem = document.createElement("dl");
+            seasonTitle.textContent = `Temporada ${season}`;
+            episodesTitle.textContent = `Episodios`;
+            detailsContent.appendChild(seasonTitle);
+            detailsContent.appendChild(episodesTitle);
+            detailsContent.appendChild(dlElem);
+            currentSeason = season;
+          }
+          const dtElem = document.createElement("dt");
+          const ddElem = document.createElement("dd");
+          dtElem.textContent = `${episode}`;
+          ddElem.textContent = title;
+
+          if (dlElem) {
+            dlElem.appendChild(dtElem);
+            dlElem.appendChild(ddElem);
+          }
+          return e;
+        });
+
+        detailsContent.appendChild(maxdate);
+        return detailsContent;
+      };
+
+      const parseCharacters = (list) => {
+        const charactersList = [...list].map((item) => {
+          const character = (({ name, appearance, occupation }) => ({
+            name,
+            appearance,
+            occupation,
+            episodes: [],
+            dates: [],
+          }))(item);
+          return character;
+        });
+        const appearances = [3, 5];
+        const filteredList = charactersList.filter((elem) =>
+          appearances.every((value) => elem.appearance.includes(value))
+        );
+        const orderedByNameList = filteredList
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .reverse();
+        fetchResource(
+          1500,
+          "./episodes.json",
+          parseEpisodes,
+          orderedByNameList
+        );
+      };
+    </script>
+  </body>
+</html>
